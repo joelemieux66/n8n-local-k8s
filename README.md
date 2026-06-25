@@ -10,14 +10,14 @@ This repository is intended to be safe to publish while still supporting a priva
 flowchart LR
   user["User / Webhooks"] --> cf["Cloudflare Tunnel"]
   cf -->|"tunnel route"| svc["n8n-main Service"]
-  svc --> main1["n8n-main replicas"]
+  svc --> main1["n8n-main replicas\nUI / API / webhooks"]
 
-  main1 --> pg["PostgreSQL"]
-  main1 --> redis["Redis queue"]
-  worker["n8n-worker"] --> redis
+  main1 --> pg["PostgreSQL\nworkflows / credentials / datatables / state"]
+  main1 --> redis["Redis queue\njob broker"]
+  redis -->|"serves queued jobs"| worker["n8n-worker\nworkflow execution"]
   worker --> pg
 
-  main1 -. "workflow HTTP calls" .-> ollama["Ollama Service"]
+  main1 -. "workflow HTTP calls" .-> ollama["Ollama Service\nAI model runtime"]
   worker -. "workflow HTTP calls" .-> ollama
 
   otel["OpenTelemetry Collector"]
@@ -28,23 +28,23 @@ flowchart LR
   keda --> worker
 
   promtail["Promtail"] --> loki["Loki logs"]
-  grafana["Grafana"] -. "datasources" .-> prom
-  grafana -. "datasources" .-> loki
-  grafana -. "datasources" .-> tempo
+  prom -. "datasource" .-> grafana["Grafana UI"]
+  loki -. "datasource" .-> grafana
+  tempo -. "datasource" .-> grafana
 ```
 
-Solid arrows are chart-configured paths. Dotted arrows represent services that are available in-cluster but may require workflow or Grafana datasource configuration.
+Solid arrows are chart-configured paths. Dotted arrows represent services that are available in-cluster but may require workflow or Grafana datasource configuration. Grafana reads from Prometheus, Loki, and Tempo as observability datasources.
 
 ## Components
 
 | Component | Purpose |
 | --- | --- |
-| `n8n-main` | Main n8n web/API/webhook process, deployed with multiple replicas. |
-| `n8n-worker` | Queue worker process for executing jobs from Redis. |
-| `postgres` | Persistent n8n database. |
-| `redis` | Queue backend for n8n queue mode. |
+| `n8n-main` | n8n UI, API, and webhook process, deployed with multiple replicas. |
+| `n8n-worker` | Worker process that executes workflows from the Redis queue. |
+| `postgres` | Persistent n8n database for workflows, credentials, datatables, execution state, and other n8n data. |
+| `redis` | Queue broker that serves workflow jobs to n8n workers. |
 | `cloudflared` | Cloudflare Tunnel process for external ingress. |
-| `ollama` | Self-hosted model runtime available inside the cluster. |
+| `ollama` | Self-hosted AI model service available inside the cluster. |
 | `prometheus` | Metrics collection. |
 | `grafana` | Dashboard UI for metrics, logs, and traces. |
 | `loki` | Log storage. |
