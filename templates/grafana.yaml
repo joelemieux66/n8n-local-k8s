@@ -1,3 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {{ .Values.namespace }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.{{ .Values.namespace }}.svc.cluster.local:9090
+        isDefault: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.{{ .Values.namespace }}.svc.cluster.local:3100
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.{{ .Values.namespace }}.svc.cluster.local:3200
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,14 +38,21 @@ spec:
     spec:
       containers:
         - name: grafana
-          image: grafana/grafana:latest
+          image: "{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}"
           ports:
             - containerPort: 3000
           env:
             - name: GF_SECURITY_ADMIN_USER
-              value: admin
+              value: {{ .Values.grafana.adminUser | quote }}
             - name: GF_SECURITY_ADMIN_PASSWORD
-              value: admin
+              value: {{ .Values.grafana.adminPassword | quote }}
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
 ---
 apiVersion: v1
 kind: Service

@@ -21,12 +21,28 @@ n8n:
 
   proxyHops: "1"
 
+  otel:
+    enabled: true
+    endpoint: http://otel-collector:4318
+    tracingPath: /v1/traces
+    serviceName: n8n-local
+    sampleRate: "1.0"
+    includeNodeSpans: "true"
+    productionOnly: "false"
+    injectOutbound: "true"
+
+  license:
+    enabled: false
+    secretName: n8n-secrets
+    secretKey: N8N_LICENSE_ACTIVATION_KEY
+
 secrets:
   create: false
   n8nSecretName: n8n-secrets
   cloudflaredSecretName: cloudflared-token
   postgresPassword: ""
   n8nEncryptionKey: ""
+  n8nLicenseActivationKey: ""
   tunnelToken: ""
 
 keda:
@@ -47,6 +63,8 @@ grafana:
   image:
     repository: grafana/grafana
     tag: "latest"
+  adminUser: admin
+  adminPassword: admin
 
 prometheus:
   image:
@@ -80,3 +98,4 @@ ollama:
     tag: "latest"
   persistence:
     size: 30Gi
+  models: []

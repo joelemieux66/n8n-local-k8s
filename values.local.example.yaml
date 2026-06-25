@@ -11,7 +11,22 @@ n8n:
 
   proxyHops: "1"
 
+  otel:
+    enabled: true
+    endpoint: http://otel-collector:4318
+    tracingPath: /v1/traces
+    serviceName: n8n-local
+    sampleRate: "1.0"
+    includeNodeSpans: "true"
+    productionOnly: "false"
+    injectOutbound: "true"
+
+  license:
+    enabled: false
+
 ollama:
   enabled: true
   persistence:
     size: 30Gi
+  models:
+    - llama3.1

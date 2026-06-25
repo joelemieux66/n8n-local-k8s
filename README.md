@@ -6,34 +6,56 @@ This repository is intended to be safe to publish while still supporting a priva
 
 ## Architecture
 
+### Runtime
+
 ```mermaid
 flowchart LR
-  user["User / Webhooks"] --> cf["Cloudflare Tunnel"]
-  cf -->|"tunnel route"| svc["n8n-main Service"]
-  svc --> main1["n8n-main replicas\nUI / API / webhooks"]
+  user["Users / Webhooks"] --> cf["Cloudflare Tunnel"]
+  cf --> svc["n8n-main Service"]
 
-  main1 --> pg["PostgreSQL\nworkflows / credentials / datatables / state"]
-  main1 --> redis["Redis queue\njob broker"]
-  redis -->|"serves queued jobs"| worker["n8n-worker\nworkflow execution"]
+  subgraph mains["n8n-main Deployment"]
+    mainA["main replica A\nUI / API / webhooks"]
+    mainB["main replica B\nUI / API / webhooks"]
+  end
+
+  svc --> mainA
+  svc --> mainB
+
+  mainA --> pg["PostgreSQL\nworkflows / credentials / datatables / state"]
+  mainB --> pg
+  mainA --> redis["Redis\nqueue broker"]
+  mainB --> redis
+
+  redis -->|"serves queued jobs"| worker["n8n-worker Deployment\nworkflow execution"]
   worker --> pg
 
-  main1 -. "workflow HTTP calls" .-> ollama["Ollama Service\nAI model runtime"]
+  mainA -. "workflow HTTP calls" .-> ollama["Ollama Service\nAI model runtime"]
+  mainB -. "workflow HTTP calls" .-> ollama
   worker -. "workflow HTTP calls" .-> ollama
-
-  otel["OpenTelemetry Collector"]
-  otel --> tempo["Tempo traces"]
-
-  prom["Prometheus"] -->|"scrapes /metrics"| main1
-  keda["KEDA ScaledObject"] -->|"queries"| prom
-  keda --> worker
-
-  promtail["Promtail"] --> loki["Loki logs"]
-  prom -. "datasource" .-> grafana["Grafana UI"]
-  loki -. "datasource" .-> grafana
-  tempo -. "datasource" .-> grafana
 ```
 
-Solid arrows are chart-configured paths. Dotted arrows represent services that are available in-cluster but may require workflow or Grafana datasource configuration. Grafana reads from Prometheus, Loki, and Tempo as observability datasources.
+The `n8n-main` replicas serve the UI, API, and webhooks behind one Kubernetes Service. Workflow execution is pushed into Redis queue mode, where workers pick up jobs and execute them. PostgreSQL stores n8n data such as workflows, credentials, datatables, execution state, and settings. Ollama is available as an internal model service for workflows that call it.
+
+### Observability And Autoscaling
+
+```mermaid
+flowchart LR
+  main["n8n-main replicas"] -->|"OTLP traces"| otel["OpenTelemetry Collector"]
+  worker["n8n-worker"] -->|"OTLP traces"| otel
+  otel --> tempo["Tempo\ntrace storage"]
+
+  prom["Prometheus"] -->|"scrapes /metrics"| main
+  keda["KEDA ScaledObject"] -->|"queries queue metric"| prom
+  keda -->|"scales"| worker
+
+  promtail["Promtail"] -->|"ships pod logs"| loki["Loki\nlog storage"]
+
+  prom -->|"metrics datasource"| grafana["Grafana UI"]
+  loki -->|"logs datasource"| grafana
+  tempo -->|"traces datasource"| grafana
+```
+
+KEDA uses Prometheus as its scaler backend. The chart's `ScaledObject` queries `n8n_scaling_mode_queue_jobs_waiting` and scales the `n8n-worker` Deployment when the queue has waiting jobs. Grafana reads Prometheus, Loki, and Tempo as observability datasources.
 
 ## Components
 
@@ -74,6 +96,7 @@ n8n-local-k8s/
     ├── promtail.yaml
     ├── keda.yaml
     ├── ollama-deployment.yaml
+    ├── ollama-models-job.yaml
     ├── ollama-service.yaml
     ├── ollama-pvc.yaml
     └── secrets.yaml
@@ -130,6 +153,8 @@ ollama:
   enabled: true
   persistence:
     size: 30Gi
+  models:
+    - llama3.1
 ```
 
 Create required secrets:
@@ -208,7 +233,7 @@ Check Ollama:
 kubectl exec -n n8n deploy/ollama -- ollama list
 ```
 
-Pull a model:
+If `ollama.models` is set in your values file, Helm runs a post-install/post-upgrade Job to pull those models. You can also pull a model manually:
 
 ```bash
 kubectl exec -n n8n deploy/ollama -- ollama pull llama3.1
@@ -286,6 +311,24 @@ helm upgrade --install n8n-local . \
 ```
 
 Do not commit secret values.
+
+## Included Wiring
+
+The chart wires the core architecture end to end:
+
+- Cloudflared runs from a Kubernetes secret token and routes through the configured Cloudflare Tunnel.
+- `n8n-main` serves UI/API/webhooks and writes to Postgres.
+- `n8n-worker` executes queued workflows.
+- Redis is configured as the n8n queue broker.
+- Postgres persists n8n data.
+- n8n metrics are enabled on the main replicas for Prometheus and KEDA.
+- n8n OTLP tracing is enabled for main and worker pods and exported to the OpenTelemetry Collector.
+- OpenTelemetry exports traces to Tempo.
+- Promtail ships pod logs to Loki.
+- Grafana datasources for Prometheus, Loki, and Tempo are provisioned by the chart.
+- Ollama is deployed as an internal service with persistent model storage.
+- Optional Ollama model bootstrap pulls configured models after install/upgrade.
+- Optional n8n Enterprise license wiring can read `N8N_LICENSE_ACTIVATION_KEY` from a secret.
 
 ## Notes
 
