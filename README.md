@@ -1,59 +1,294 @@
-# n8n Enterprise Kubernetes Lab
+# n8n Local Kubernetes Stack
 
-Features:
+A Helm chart for running a local, self-hosted n8n Enterprise-style Kubernetes lab with queue workers, observability, Cloudflare Tunnel ingress, and an in-cluster Ollama model runtime.
 
-- Multi-main n8n deployment
-- Queue mode with Redis
-- PostgreSQL backend
-- Worker scaling
-- KEDA autoscaling
-- Grafana monitoring
-- Prometheus metrics
-- Loki logging
-- Tempo tracing
-- OpenTelemetry
-- Cloudflare Tunnel
-- Ollama self-hosted model runtime
+This repository is intended to be safe to publish while still supporting a private local deployment. Commit the chart and example values. Keep local overrides, rendered manifests, and exported live cluster state out of Git.
 
-Architecture:
+## Architecture
 
-This repository provides a Kubernetes-only lab environment for self-hosting n8n Enterprise with observability, autoscaling, and an in-cluster Ollama model runtime. The Helm chart at the repository root is the source of truth.
+```mermaid
+flowchart LR
+  user["User / Webhooks"] --> cf["Cloudflare Tunnel"]
+  cf --> svc["n8n-main Service"]
+  svc --> main1["n8n-main replicas"]
+  main1 --> pg["PostgreSQL"]
+  main1 --> redis["Redis queue"]
+  worker["n8n-worker"] --> redis
+  worker --> pg
+  main1 --> ollama["Ollama Service"]
+  worker --> ollama
 
-## Setup
+  main1 --> otel["OpenTelemetry Collector"]
+  worker --> otel
+  otel --> tempo["Tempo traces"]
 
-1. Create the namespace:
-   ```bash
-   kubectl create namespace n8n
-   ```
-2. Create the required secrets:
-   ```bash
-   kubectl -n n8n create secret generic n8n-secrets \
-     --from-literal=POSTGRES_PASSWORD='replace-me' \
-     --from-literal=N8N_ENCRYPTION_KEY='replace-me'
+  prom["Prometheus"] --> main1
+  prom --> keda["KEDA ScaledObject"]
+  keda --> worker
 
-   kubectl -n n8n create secret generic cloudflared-token \
-     --from-literal=TUNNEL_TOKEN='replace-me'
-   ```
-3. Copy the local values template and update it for your cluster:
-   ```bash
-   cp values.local.example.yaml values.local.yaml
-   ```
-4. Review `values.yaml` and `values.local.yaml`, especially `n8n.publicUrl` and `ollama`.
-5. Install the chart:
-   ```bash
-   helm upgrade --install n8n-local . --namespace n8n -f values.local.yaml
-   ```
+  promtail["Promtail"] --> loki["Loki logs"]
+  grafana["Grafana"] --> prom
+  grafana --> loki
+  grafana --> tempo
+```
+
+## Components
+
+| Component | Purpose |
+| --- | --- |
+| `n8n-main` | Main n8n web/API/webhook process, deployed with multiple replicas. |
+| `n8n-worker` | Queue worker process for executing jobs from Redis. |
+| `postgres` | Persistent n8n database. |
+| `redis` | Queue backend for n8n queue mode. |
+| `cloudflared` | Cloudflare Tunnel process for external ingress. |
+| `ollama` | Self-hosted model runtime available inside the cluster. |
+| `prometheus` | Metrics collection. |
+| `grafana` | Dashboard UI for metrics, logs, and traces. |
+| `loki` | Log storage. |
+| `promtail` | Pod log collector. |
+| `tempo` | Trace storage. |
+| `otel-collector` | OpenTelemetry receiver and trace exporter. |
+| `keda` | Worker autoscaling based on queue metrics. |
+
+## Repository Layout
+
+```text
+n8n-local-k8s/
+├── Chart.yaml
+├── values.yaml
+├── values.local.example.yaml
+└── templates/
+    ├── n8n-main.yaml
+    ├── n8n-worker.yaml
+    ├── postgres.yaml
+    ├── redis.yaml
+    ├── cloudflared.yaml
+    ├── prometheus.yaml
+    ├── grafana.yaml
+    ├── loki.yaml
+    ├── tempo.yaml
+    ├── otel-collector.yaml
+    ├── promtail.yaml
+    ├── keda.yaml
+    ├── ollama-deployment.yaml
+    ├── ollama-service.yaml
+    ├── ollama-pvc.yaml
+    └── secrets.yaml
+```
+
+## Values Strategy
+
+Use layered values:
+
+- `values.yaml`: committed defaults and reusable template values.
+- `values.local.example.yaml`: committed example for local overrides.
+- `values.local.yaml`: private local overrides, ignored by Git.
+- `values.secret.yaml` or Kubernetes secrets: private credentials, ignored by Git.
+
+The default chart uses placeholder public URLs. Your real domain belongs in `values.local.yaml`.
+
+## Prerequisites
+
+- A Kubernetes cluster with a default `StorageClass`.
+- `kubectl` configured for that cluster.
+- Helm 3.
+- KEDA installed if you want the worker autoscaler to run.
+- A Cloudflare Tunnel token if using `cloudflared`.
+- The original `N8N_ENCRYPTION_KEY` if restoring existing n8n data.
+
+## First-Time Setup
+
+Create the namespace:
+
+```bash
+kubectl create namespace n8n
+```
+
+Create a private local values file:
+
+```bash
+cp values.local.example.yaml values.local.yaml
+```
+
+Edit `values.local.yaml`:
+
+```yaml
+n8n:
+  publicUrl:
+    host: n8n.your-domain.com
+    protocol: https
+    port: "5678"
+    webhookUrl: https://n8n.your-domain.com/
+    editorBaseUrl: https://n8n.your-domain.com/
+
+  proxyHops: "1"
+
+ollama:
+  enabled: true
+  persistence:
+    size: 30Gi
+```
+
+Create required secrets:
+
+```bash
+kubectl -n n8n create secret generic n8n-secrets \
+  --from-literal=POSTGRES_PASSWORD='replace-me' \
+  --from-literal=N8N_ENCRYPTION_KEY='replace-me'
+
+kubectl -n n8n create secret generic cloudflared-token \
+  --from-literal=TUNNEL_TOKEN='replace-me'
+```
+
+Install KEDA:
+
+```bash
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm upgrade --install keda kedacore/keda --namespace keda --create-namespace
+```
+
+Deploy the stack:
+
+```bash
+helm upgrade --install n8n-local . --namespace n8n -f values.local.yaml
+```
+
+## Updating an Existing Deployment
+
+If this chart is being pointed at existing n8n data, do not change `N8N_ENCRYPTION_KEY`. Existing credentials depend on it.
+
+Render and diff before applying:
+
+```bash
+helm template n8n-local . --namespace n8n -f values.local.yaml > rendered.yaml
+kubectl diff -n n8n -f rendered.yaml
+```
+
+Then upgrade:
+
+```bash
+helm upgrade n8n-local . --namespace n8n -f values.local.yaml
+```
+
+## Verification
+
+Check pods:
+
+```bash
+kubectl get pods -n n8n
+```
+
+Check services and storage:
+
+```bash
+kubectl get svc -n n8n
+kubectl get pvc -n n8n
+```
+
+Check n8n logs:
+
+```bash
+kubectl logs -n n8n deploy/n8n-main --tail=100
+kubectl logs -n n8n deploy/n8n-worker --tail=100
+```
+
+Check Cloudflared:
+
+```bash
+kubectl logs -n n8n deploy/cloudflared --tail=100
+```
+
+Check Ollama:
+
+```bash
+kubectl exec -n n8n deploy/ollama -- ollama list
+```
+
+Pull a model:
+
+```bash
+kubectl exec -n n8n deploy/ollama -- ollama pull llama3.1
+```
+
+## Common Operations
+
+Upgrade after chart changes:
+
+```bash
+helm upgrade n8n-local . --namespace n8n -f values.local.yaml
+```
+
+View release history:
+
+```bash
+helm history n8n-local --namespace n8n
+```
+
+Rollback:
+
+```bash
+helm rollback n8n-local <revision> --namespace n8n
+```
+
+Uninstall the release:
+
+```bash
+helm uninstall n8n-local --namespace n8n
+```
+
+The uninstall command does not always remove persistent volumes, depending on the cluster and reclaim policy. Review PVCs before deleting data.
+
+## Data And Secrets
+
+Important local-only files are ignored by Git:
+
+- `values.local.yaml`
+- `values.secret.yaml`
+- `values.secrets.yaml`
+- `live-*.yaml`
+- `rendered*.yaml`
+- `*.dump`
+- `*.sql`
+
+For existing n8n data, preserve:
+
+- `N8N_ENCRYPTION_KEY`
+- Postgres password
+- Postgres PVC or database contents
+- n8n public URL and webhook URL
+- Cloudflare Tunnel token
+
+## Helm-Managed Secrets
+
+By default, the chart expects secrets to already exist in Kubernetes. For local-only labs, the chart can create them if `secrets.create=true` and values are provided through a private values file or `--set`.
+
+Example private file:
+
+```yaml
+secrets:
+  create: true
+  postgresPassword: replace-me
+  n8nEncryptionKey: replace-me
+  tunnelToken: replace-me
+```
+
+Deploy with:
+
+```bash
+helm upgrade --install n8n-local . \
+  --namespace n8n \
+  -f values.local.yaml \
+  -f values.secret.yaml
+```
+
+Do not commit secret values.
 
 ## Notes
 
-- KEDA must be installed in the cluster before the `ScaledObject` can work.
-- Cloudflared requires a valid tunnel token in the `cloudflared-token` secret.
-- Ollama is included as an in-cluster self-hosted model runtime.
-- Commit `values.yaml` and `values.local.example.yaml`; keep `values.local.yaml` private.
-- To create secrets through Helm for a local-only lab, set `secrets.create=true` and provide secret values with `--set` or a private values file.
-- After cleanup, initialize the repository and commit:
-  ```bash
-  git init
-  git add .
-  git commit -m "Initial Kubernetes chart"
-  ```
+- `n8n-main` is exposed internally through the `n8n-main` Service.
+- External traffic is expected to enter through Cloudflare Tunnel.
+- `postgres-data` stores n8n database data.
+- `ollama-data` stores Ollama model data.
+- KEDA scales `n8n-worker` based on Prometheus queue metrics.
+- The chart defaults are designed for a local lab, not a hardened production environment.
