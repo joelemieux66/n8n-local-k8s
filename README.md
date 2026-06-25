@@ -9,28 +9,31 @@ This repository is intended to be safe to publish while still supporting a priva
 ```mermaid
 flowchart LR
   user["User / Webhooks"] --> cf["Cloudflare Tunnel"]
-  cf --> svc["n8n-main Service"]
+  cf -->|"tunnel route"| svc["n8n-main Service"]
   svc --> main1["n8n-main replicas"]
+
   main1 --> pg["PostgreSQL"]
   main1 --> redis["Redis queue"]
   worker["n8n-worker"] --> redis
   worker --> pg
-  main1 --> ollama["Ollama Service"]
-  worker --> ollama
 
-  main1 --> otel["OpenTelemetry Collector"]
-  worker --> otel
+  main1 -. "workflow HTTP calls" .-> ollama["Ollama Service"]
+  worker -. "workflow HTTP calls" .-> ollama
+
+  otel["OpenTelemetry Collector"]
   otel --> tempo["Tempo traces"]
 
-  prom["Prometheus"] --> main1
-  prom --> keda["KEDA ScaledObject"]
+  prom["Prometheus"] -->|"scrapes /metrics"| main1
+  keda["KEDA ScaledObject"] -->|"queries"| prom
   keda --> worker
 
   promtail["Promtail"] --> loki["Loki logs"]
-  grafana["Grafana"] --> prom
-  grafana --> loki
-  grafana --> tempo
+  grafana["Grafana"] -. "datasources" .-> prom
+  grafana -. "datasources" .-> loki
+  grafana -. "datasources" .-> tempo
 ```
+
+Solid arrows are chart-configured paths. Dotted arrows represent services that are available in-cluster but may require workflow or Grafana datasource configuration.
 
 ## Components
 
