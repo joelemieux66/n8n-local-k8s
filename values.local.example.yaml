@@ -1,0 +1,17 @@
+# Copy this file to values.local.yaml and update it for your local cluster.
+# values.local.yaml is ignored by Git.
+
+n8n:
+  publicUrl:
+    host: n8n.example.com
+    protocol: https
+    port: "5678"
+    webhookUrl: https://n8n.example.com/
+    editorBaseUrl: https://n8n.example.com/
+
+  proxyHops: "1"
+
+ollama:
+  enabled: true
+  persistence:
+    size: 30Gi

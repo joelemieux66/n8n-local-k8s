@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-worker
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.n8n.worker.replicas }}
+  selector:
+    matchLabels:
+      app: n8n-worker
+  template:
+    metadata:
+      labels:
+        app: n8n-worker
+    spec:
+      containers:
+        - name: n8n-worker
+          image: "{{ .Values.n8n.image.repository }}:{{ .Values.n8n.image.tag }}"
+          imagePullPolicy: {{ .Values.n8n.image.pullPolicy }}
+          command: ["n8n", "worker"]
+          env:
+            - name: DB_TYPE
+              value: postgresdb
+            - name: DB_POSTGRESDB_HOST
+              value: postgres
+            - name: DB_POSTGRESDB_DATABASE
+              value: n8n
+            - name: DB_POSTGRESDB_USER
+              value: n8n
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.n8nSecretName }}
+                  key: POSTGRES_PASSWORD
+            - name: EXECUTIONS_MODE
+              value: queue
+            - name: QUEUE_BULL_REDIS_HOST
+              value: redis
+            - name: QUEUE_BULL_REDIS_PORT
+              value: "6379"
+            - name: N8N_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.n8nSecretName }}
+                  key: N8N_ENCRYPTION_KEY
+            - name: N8N_HOST
+              value: {{ .Values.n8n.publicUrl.host | quote }}
+            - name: N8N_PROTOCOL
+              value: {{ .Values.n8n.publicUrl.protocol | quote }}
+            - name: N8N_PORT
+              value: {{ .Values.n8n.publicUrl.port | quote }}
+            - name: WEBHOOK_URL
+              value: {{ .Values.n8n.publicUrl.webhookUrl | quote }}
+            - name: N8N_EDITOR_BASE_URL
+              value: {{ .Values.n8n.publicUrl.editorBaseUrl | quote }}

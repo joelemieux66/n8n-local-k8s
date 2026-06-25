@@ -1,0 +1,17 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: n8n-worker-scaler
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    name: n8n-worker
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.{{ .Values.namespace }}.svc.cluster.local:9090
+        metricName: n8n_queue_jobs_waiting
+        query: n8n_scaling_mode_queue_jobs_waiting
+        threshold: "1"

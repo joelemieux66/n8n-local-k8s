@@ -1,0 +1,82 @@
+namespace: n8n
+
+n8n:
+  image:
+    repository: docker.n8n.io/n8nio/n8n
+    tag: "2.27.4"
+    pullPolicy: IfNotPresent
+
+  main:
+    replicas: 2
+
+  worker:
+    replicas: 1
+
+  publicUrl:
+    host: n8n.example.com
+    protocol: https
+    port: "5678"
+    webhookUrl: https://n8n.example.com/
+    editorBaseUrl: https://n8n.example.com/
+
+  proxyHops: "1"
+
+secrets:
+  create: false
+  n8nSecretName: n8n-secrets
+  cloudflaredSecretName: cloudflared-token
+  postgresPassword: ""
+  n8nEncryptionKey: ""
+  tunnelToken: ""
+
+keda:
+  minReplicas: 1
+  maxReplicas: 5
+
+postgres:
+  image:
+    repository: postgres
+    tag: "16"
+
+redis:
+  image:
+    repository: redis
+    tag: "7"
+
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: "latest"
+
+prometheus:
+  image:
+    repository: prom/prometheus
+    tag: "latest"
+
+loki:
+  image:
+    repository: grafana/loki
+    tag: "latest"
+
+tempo:
+  image:
+    repository: grafana/tempo
+    tag: "latest"
+
+otelCollector:
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "latest"
+
+cloudflared:
+  image:
+    repository: cloudflare/cloudflared
+    tag: "latest"
+
+ollama:
+  enabled: true
+  image:
+    repository: ollama/ollama
+    tag: "latest"
+  persistence:
+    size: 30Gi

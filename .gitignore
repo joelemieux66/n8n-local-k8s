@@ -1,0 +1,23 @@
+# Local secret values
+*.local.yaml
+*.local.yml
+values.secret.yaml
+values.secrets.yaml
+live-*.yaml
+rendered*.yaml
+
+# Local backup and runtime state
+n8n-old-db.sql
+n8n-backup.dump
+loki-data/
+tempo-data/
+promtail-config.yml/
+*.dump
+*.sql
+
+# IDE/editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-main
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.n8n.main.replicas }}
+  selector:
+    matchLabels:
+      app: n8n-main
+  template:
+    metadata:
+      labels:
+        app: n8n-main
+    spec:
+      containers:
+        - name: n8n
+          image: "{{ .Values.n8n.image.repository }}:{{ .Values.n8n.image.tag }}"
+          imagePullPolicy: {{ .Values.n8n.image.pullPolicy }}
+          ports:
+            - containerPort: 5678
+          env:
+            - name: DB_TYPE
+              value: postgresdb
+            - name: DB_POSTGRESDB_HOST
+              value: postgres
+            - name: DB_POSTGRESDB_DATABASE
+              value: n8n
+            - name: DB_POSTGRESDB_USER
+              value: n8n
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.n8nSecretName }}
+                  key: POSTGRES_PASSWORD
+            - name: EXECUTIONS_MODE
+              value: queue
+            - name: QUEUE_BULL_REDIS_HOST
+              value: redis
+            - name: QUEUE_BULL_REDIS_PORT
+              value: "6379"
+            - name: N8N_METRICS
+              value: "true"
+            - name: N8N_METRICS_INCLUDE_QUEUE_METRICS
+              value: "true"
+            - name: N8N_METRICS_QUEUE_METRICS_INTERVAL
+              value: "15"
+            - name: N8N_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.n8nSecretName }}
+                  key: N8N_ENCRYPTION_KEY
+            - name: N8N_HOST
+              value: {{ .Values.n8n.publicUrl.host | quote }}
+            - name: N8N_PROTOCOL
+              value: {{ .Values.n8n.publicUrl.protocol | quote }}
+            - name: N8N_PORT
+              value: {{ .Values.n8n.publicUrl.port | quote }}
+            - name: WEBHOOK_URL
+              value: {{ .Values.n8n.publicUrl.webhookUrl | quote }}
+            - name: N8N_EDITOR_BASE_URL
+              value: {{ .Values.n8n.publicUrl.editorBaseUrl | quote }}
+            - name: N8N_PROXY_HOPS
+              value: {{ .Values.n8n.proxyHops | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-main
+  namespace: {{ .Values.namespace }}
+spec:
+  type: NodePort
+  selector:
+    app: n8n-main
+  ports:
+    - port: 5678
+      targetPort: 5678
+      nodePort: 30678
