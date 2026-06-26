@@ -4,10 +4,10 @@
 n8n:
   publicUrl:
     host: n8n.local
-    protocol: http
+    protocol: https
     port: "5678"
-    webhookUrl: http://n8n.local/
-    editorBaseUrl: http://n8n.local/
+    webhookUrl: https://n8n.local/
+    editorBaseUrl: https://n8n.local/
 
   proxyHops: "1"
 
@@ -17,9 +17,22 @@ n8n:
   license:
     enabled: false
 
+ingress:
+  enabled: true
+  className: nginx
+  grafanaHost: grafana.local
+  tls:
+    enabled: true
+    secretName: n8n-tls
+
+# Set to false if Ollama is already installed as a separate Helm release
+# in the same namespace.
 ollama:
   enabled: true
   persistence:
     size: 30Gi
   models:
     - llama3.1
+
+keda:
+  enabled: true

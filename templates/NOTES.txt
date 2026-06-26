@@ -4,18 +4,32 @@ Your n8n local stack has been deployed.
 
      127.0.0.1 {{ .Values.n8n.publicUrl.host }} {{ .Values.ingress.grafanaHost }}
 
-2. Open n8n:
+{{- if .Values.ingress.tls.enabled }}
+
+2. Create the local TLS secret with mkcert if you have not already:
+
+     brew install mkcert
+     mkcert -install
+     mkcert {{ .Values.n8n.publicUrl.host }} {{ .Values.ingress.grafanaHost }}
+
+     kubectl -n {{ .Values.namespace }} create secret tls {{ .Values.ingress.tls.secretName }} \
+       --cert={{ .Values.n8n.publicUrl.host }}+1.pem \
+       --key={{ .Values.n8n.publicUrl.host }}+1-key.pem
+
+{{- end }}
+
+3. Open n8n:
 
      {{ .Values.n8n.publicUrl.editorBaseUrl }}
 
    Open Grafana:
 
-     http://{{ .Values.ingress.grafanaHost }}/
+     {{ .Values.n8n.publicUrl.protocol }}://{{ .Values.ingress.grafanaHost }}/
 
-3. Check pod status:
+4. Check pod status:
 
      kubectl get pods -n {{ .Values.namespace }}
 
-4. View n8n logs:
+5. View n8n logs:
 
      kubectl logs -n {{ .Values.namespace }} deploy/n8n-main --tail=100

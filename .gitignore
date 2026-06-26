@@ -1,4 +1,6 @@
-# Local secret values
+# Local TLS certificates (mkcert)
+certs/
+
 *.local.yaml
 *.local.yml
 values.secret.yaml
