@@ -1,6 +1,6 @@
 apiVersion: v2
 name: n8n-enterprise-local
-description: Local Kubernetes lab for n8n Enterprise with queue workers, observability, KEDA autoscaling, and Ollama.
+description: Local Kubernetes lab for n8n Enterprise with queue workers, observability, and KEDA autoscaling.
 type: application
 version: 0.1.0
 appVersion: "2.27.4"

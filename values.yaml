@@ -100,12 +100,3 @@ promtail:
   image:
     repository: grafana/promtail
     tag: "latest"
-
-ollama:
-  enabled: true
-  image:
-    repository: ollama/ollama
-    tag: "latest"
-  persistence:
-    size: 30Gi
-  models: []

@@ -1,6 +1,6 @@
 # n8n Local Kubernetes Stack
 
-A Helm chart for running a fully local, self-hosted n8n Enterprise-style Kubernetes lab with queue workers, nginx ingress, mkcert TLS, observability, and optional Ollama.
+A Helm chart for running a fully local, self-hosted n8n Enterprise-style Kubernetes lab with queue workers, nginx ingress, mkcert TLS, and observability.
 
 This repository is safe to publish. Commit the chart and example values. Keep private overrides, TLS key material, rendered manifests, and cluster exports out of Git.
 
@@ -38,9 +38,6 @@ flowchart LR
 
   redis --> worker["n8n-worker"]
   worker --> pg
-
-  mainA -.-> ollama["Ollama\noptional"]
-  worker -.-> ollama
 ```
 
 ### Observability
@@ -83,7 +80,6 @@ n8n-enterprise-local/
     ├── otel-collector.yaml
     ├── promtail.yaml
     ├── keda.yaml
-    ├── ollama-*.yaml
     ├── secrets.yaml
     └── NOTES.txt
 ```
@@ -184,8 +180,6 @@ Set `keda.enabled: false` in your values file if you skip this step.
 cp values.local.example.yaml values.local.yaml
 ```
 
-If Ollama is already installed as a separate Helm release in the same namespace, keep `ollama.enabled: false` in `values.local.yaml` to avoid ownership conflicts.
-
 ### 8. Deploy
 
 ```bash
@@ -243,31 +237,6 @@ If Helm reports server-side apply conflicts after manual `kubectl set env` chang
 helm upgrade n8n . --namespace n8n -f values.local.yaml --force-conflicts
 ```
 
-## Ollama
-
-Enable in `values.local.yaml` when Ollama is managed by this chart:
-
-```yaml
-ollama:
-  enabled: true
-  persistence:
-    size: 30Gi
-  models:
-    - llama3.1
-```
-
-Check models:
-
-```bash
-kubectl exec -n n8n deploy/ollama -- ollama list
-```
-
-Pull manually:
-
-```bash
-kubectl exec -n n8n deploy/ollama -- ollama pull llama3.1
-```
-
 ## Configuration Flags
 
 | Value | Default | Purpose |
@@ -275,7 +244,6 @@ kubectl exec -n n8n deploy/ollama -- ollama pull llama3.1
 | `ingress.enabled` | `true` | Create nginx Ingress for n8n and Grafana |
 | `ingress.tls.enabled` | `true` | Terminate HTTPS using the `n8n-tls` secret |
 | `ingress.tls.secretName` | `n8n-tls` | TLS secret name in the release namespace |
-| `ollama.enabled` | `true` | Deploy Ollama via this chart |
 | `keda.enabled` | `true` | Create the worker `ScaledObject` |
 | `n8n.otel.enabled` | `true` | Export OTLP traces from n8n pods |
 | `n8n.license.enabled` | `false` | Read Enterprise license key from a secret |
