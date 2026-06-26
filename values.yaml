@@ -1,5 +1,10 @@
 namespace: n8n
 
+ingress:
+  enabled: true
+  className: nginx
+  grafanaHost: grafana.local
+
 n8n:
   image:
     repository: docker.n8n.io/n8nio/n8n
@@ -13,11 +18,11 @@ n8n:
     replicas: 1
 
   publicUrl:
-    host: n8n.example.com
-    protocol: https
+    host: n8n.local
+    protocol: http
     port: "5678"
-    webhookUrl: https://n8n.example.com/
-    editorBaseUrl: https://n8n.example.com/
+    webhookUrl: http://n8n.local/
+    editorBaseUrl: http://n8n.local/
 
   proxyHops: "1"
 
@@ -39,15 +44,15 @@ n8n:
 secrets:
   create: false
   n8nSecretName: n8n-secrets
-  cloudflaredSecretName: cloudflared-token
   postgresPassword: ""
   n8nEncryptionKey: ""
   n8nLicenseActivationKey: ""
-  tunnelToken: ""
 
 keda:
+  enabled: true
   minReplicas: 1
   maxReplicas: 5
+  threshold: "1"
 
 postgres:
   image:
@@ -86,9 +91,9 @@ otelCollector:
     repository: otel/opentelemetry-collector-contrib
     tag: "latest"
 
-cloudflared:
+promtail:
   image:
-    repository: cloudflare/cloudflared
+    repository: grafana/promtail
     tag: "latest"
 
 ollama:

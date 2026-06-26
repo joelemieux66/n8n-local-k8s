@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: loki
-          image: grafana/loki:latest
+          image: "{{ .Values.loki.image.repository }}:{{ .Values.loki.image.tag }}"
           args:
             - "-config.file=/etc/loki/local-config.yaml"
           ports:

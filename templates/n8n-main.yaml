@@ -67,6 +67,8 @@ spec:
               value: {{ .Values.n8n.publicUrl.webhookUrl | quote }}
             - name: N8N_EDITOR_BASE_URL
               value: {{ .Values.n8n.publicUrl.editorBaseUrl | quote }}
+            - name: N8N_SECURE_COOKIE
+              value: "false"
             - name: N8N_PROXY_HOPS
               value: {{ .Values.n8n.proxyHops | quote }}
             {{- if .Values.n8n.otel.enabled }}
@@ -94,10 +96,10 @@ metadata:
   name: n8n-main
   namespace: {{ .Values.namespace }}
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: n8n-main
   ports:
     - port: 5678
       targetPort: 5678
-      nodePort: 30678
+      protocol: TCP

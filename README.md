@@ -1,6 +1,6 @@
 # n8n Local Kubernetes Stack
 
-A Helm chart for running a local, self-hosted n8n Enterprise-style Kubernetes lab with queue workers, observability, Cloudflare Tunnel ingress, and an in-cluster Ollama model runtime.
+A Helm chart for running a local, self-hosted n8n Enterprise-style Kubernetes lab with queue workers, nginx ingress, observability, and an optional in-cluster Ollama model runtime.
 
 This repository is intended to be safe to publish while still supporting a private local deployment. Commit the chart and example values. Keep local overrides, rendered manifests, and exported live cluster state out of Git.
 
@@ -10,8 +10,8 @@ This repository is intended to be safe to publish while still supporting a priva
 
 ```mermaid
 flowchart LR
-  user["Users / Webhooks"] --> cf["Cloudflare Tunnel"]
-  cf --> svc["n8n-main Service"]
+  user["Users / Webhooks"] --> ingress["nginx Ingress"]
+  ingress --> svc["n8n-main Service"]
 
   subgraph mains["n8n-main Deployment"]
     mainA["main replica A\nUI / API / webhooks"]
@@ -53,9 +53,10 @@ flowchart LR
   prom -->|"metrics datasource"| grafana["Grafana UI"]
   loki -->|"logs datasource"| grafana
   tempo -->|"traces datasource"| grafana
+  ingress --> grafana
 ```
 
-KEDA uses Prometheus as its scaler backend. The chart's `ScaledObject` queries `n8n_scaling_mode_queue_jobs_waiting` and scales the `n8n-worker` Deployment when the queue has waiting jobs. Grafana reads Prometheus, Loki, and Tempo as observability datasources.
+KEDA uses Prometheus as its scaler backend. The chart's `ScaledObject` queries `n8n_scaling_mode_queue_jobs_waiting` and scales the `n8n-worker` Deployment when the queue has waiting jobs. Grafana reads Prometheus, Loki, and Tempo as observability datasources and is exposed through the same local ingress.
 
 ## Components
 
@@ -65,8 +66,8 @@ KEDA uses Prometheus as its scaler backend. The chart's `ScaledObject` queries `
 | `n8n-worker` | Worker process that executes workflows from the Redis queue. |
 | `postgres` | Persistent n8n database for workflows, credentials, datatables, execution state, and other n8n data. |
 | `redis` | Queue broker that serves workflow jobs to n8n workers. |
-| `cloudflared` | Cloudflare Tunnel process for external ingress. |
-| `ollama` | Self-hosted AI model service available inside the cluster. |
+| `ingress` | nginx Ingress for local access to n8n and Grafana. |
+| `ollama` | Optional self-hosted AI model service available inside the cluster. |
 | `prometheus` | Metrics collection. |
 | `grafana` | Dashboard UI for metrics, logs, and traces. |
 | `loki` | Log storage. |
@@ -78,7 +79,7 @@ KEDA uses Prometheus as its scaler backend. The chart's `ScaledObject` queries `
 ## Repository Layout
 
 ```text
-n8n-local-k8s/
+n8n-enterprise-local/
 ├── Chart.yaml
 ├── values.yaml
 ├── values.local.example.yaml
@@ -87,7 +88,7 @@ n8n-local-k8s/
     ├── n8n-worker.yaml
     ├── postgres.yaml
     ├── redis.yaml
-    ├── cloudflared.yaml
+    ├── ingress.yaml
     ├── prometheus.yaml
     ├── grafana.yaml
     ├── loki.yaml
@@ -111,15 +112,15 @@ Use layered values:
 - `values.local.yaml`: private local overrides, ignored by Git.
 - `values.secret.yaml` or Kubernetes secrets: private credentials, ignored by Git.
 
-The default chart uses placeholder public URLs. Your real domain belongs in `values.local.yaml`.
+Defaults target local development with `n8n.local` and `grafana.local` over HTTP through nginx ingress.
 
 ## Prerequisites
 
 - A Kubernetes cluster with a default `StorageClass`.
 - `kubectl` configured for that cluster.
 - Helm 3.
+- An nginx Ingress Controller installed in the cluster.
 - KEDA installed if you want the worker autoscaler to run.
-- A Cloudflare Tunnel token if using `cloudflared`.
 - The original `N8N_ENCRYPTION_KEY` if restoring existing n8n data.
 
 ## First-Time Setup
@@ -136,26 +137,13 @@ Create a private local values file:
 cp values.local.example.yaml values.local.yaml
 ```
 
-Edit `values.local.yaml`:
+Add local hostnames to `/etc/hosts`:
 
-```yaml
-n8n:
-  publicUrl:
-    host: n8n.your-domain.com
-    protocol: https
-    port: "5678"
-    webhookUrl: https://n8n.your-domain.com/
-    editorBaseUrl: https://n8n.your-domain.com/
-
-  proxyHops: "1"
-
-ollama:
-  enabled: true
-  persistence:
-    size: 30Gi
-  models:
-    - llama3.1
+```text
+127.0.0.1 n8n.local grafana.local
 ```
+
+Point `127.0.0.1` at wherever your ingress controller is reachable. For Docker Desktop, minikube tunnel, or kind with a local load balancer, that is usually localhost.
 
 Create required secrets:
 
@@ -163,9 +151,6 @@ Create required secrets:
 kubectl -n n8n create secret generic n8n-secrets \
   --from-literal=POSTGRES_PASSWORD='replace-me' \
   --from-literal=N8N_ENCRYPTION_KEY='replace-me'
-
-kubectl -n n8n create secret generic cloudflared-token \
-  --from-literal=TUNNEL_TOKEN='replace-me'
 ```
 
 Install KEDA:
@@ -214,17 +199,19 @@ kubectl get svc -n n8n
 kubectl get pvc -n n8n
 ```
 
+Check ingress:
+
+```bash
+kubectl get ingress -n n8n
+```
+
+Open n8n at `http://n8n.local/` and Grafana at `http://grafana.local/`.
+
 Check n8n logs:
 
 ```bash
 kubectl logs -n n8n deploy/n8n-main --tail=100
 kubectl logs -n n8n deploy/n8n-worker --tail=100
-```
-
-Check Cloudflared:
-
-```bash
-kubectl logs -n n8n deploy/cloudflared --tail=100
 ```
 
 Check Ollama:
@@ -285,7 +272,6 @@ For existing n8n data, preserve:
 - Postgres password
 - Postgres PVC or database contents
 - n8n public URL and webhook URL
-- Cloudflare Tunnel token
 
 ## Helm-Managed Secrets
 
@@ -298,7 +284,6 @@ secrets:
   create: true
   postgresPassword: replace-me
   n8nEncryptionKey: replace-me
-  tunnelToken: replace-me
 ```
 
 Deploy with:
@@ -316,7 +301,7 @@ Do not commit secret values.
 
 The chart wires the core architecture end to end:
 
-- Cloudflared runs from a Kubernetes secret token and routes through the configured Cloudflare Tunnel.
+- nginx Ingress exposes `n8n-main` and Grafana on local hostnames.
 - `n8n-main` serves UI/API/webhooks and writes to Postgres.
 - `n8n-worker` executes queued workflows.
 - Redis is configured as the n8n queue broker.
@@ -326,14 +311,26 @@ The chart wires the core architecture end to end:
 - OpenTelemetry exports traces to Tempo.
 - Promtail ships pod logs to Loki.
 - Grafana datasources for Prometheus, Loki, and Tempo are provisioned by the chart.
-- Ollama is deployed as an internal service with persistent model storage.
+- Ollama is deployed as an internal service with persistent model storage when enabled.
 - Optional Ollama model bootstrap pulls configured models after install/upgrade.
 - Optional n8n Enterprise license wiring can read `N8N_LICENSE_ACTIVATION_KEY` from a secret.
+
+## Configuration Flags
+
+| Value | Default | Purpose |
+| --- | --- | --- |
+| `ingress.enabled` | `true` | Create nginx Ingress for n8n and Grafana. |
+| `ollama.enabled` | `true` | Deploy Ollama and related PVC/Service. |
+| `keda.enabled` | `true` | Create the worker `ScaledObject`. Requires KEDA in the cluster. |
+| `n8n.otel.enabled` | `true` | Export OTLP traces from n8n pods. |
+| `n8n.license.enabled` | `false` | Read Enterprise license key from a secret. |
+| `secrets.create` | `false` | Let Helm create the `n8n-secrets` Secret. |
 
 ## Notes
 
 - `n8n-main` is exposed internally through the `n8n-main` Service.
-- External traffic is expected to enter through Cloudflare Tunnel.
+- External traffic enters through the local nginx Ingress.
+- `N8N_SECURE_COOKIE=false` is set for local HTTP access.
 - `postgres-data` stores n8n database data.
 - `ollama-data` stores Ollama model data.
 - KEDA scales `n8n-worker` based on Prometheus queue metrics.

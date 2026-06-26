@@ -1,0 +1,21 @@
+Your n8n local stack has been deployed.
+
+1. Add these hosts to /etc/hosts (point at your ingress controller):
+
+     127.0.0.1 {{ .Values.n8n.publicUrl.host }} {{ .Values.ingress.grafanaHost }}
+
+2. Open n8n:
+
+     {{ .Values.n8n.publicUrl.editorBaseUrl }}
+
+   Open Grafana:
+
+     http://{{ .Values.ingress.grafanaHost }}/
+
+3. Check pod status:
+
+     kubectl get pods -n {{ .Values.namespace }}
+
+4. View n8n logs:
+
+     kubectl logs -n {{ .Values.namespace }} deploy/n8n-main --tail=100

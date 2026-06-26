@@ -60,6 +60,8 @@ spec:
               value: {{ .Values.n8n.publicUrl.webhookUrl | quote }}
             - name: N8N_EDITOR_BASE_URL
               value: {{ .Values.n8n.publicUrl.editorBaseUrl | quote }}
+            - name: N8N_SECURE_COOKIE
+              value: "false"
             {{- if .Values.n8n.otel.enabled }}
             - name: N8N_OTEL_ENABLED
               value: "true"

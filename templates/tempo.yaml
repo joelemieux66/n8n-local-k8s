@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
         - name: tempo
-          image: grafana/tempo:latest
+          image: "{{ .Values.tempo.image.repository }}:{{ .Values.tempo.image.tag }}"
           args:
             - "-config.file=/etc/tempo/tempo.yaml"
           ports:

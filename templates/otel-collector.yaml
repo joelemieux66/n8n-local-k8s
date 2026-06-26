@@ -48,7 +48,7 @@ spec:
     spec:
       containers:
         - name: otel-collector
-          image: otel/opentelemetry-collector-contrib:latest
+          image: "{{ .Values.otelCollector.image.repository }}:{{ .Values.otelCollector.image.tag }}"
           args:
             - "--config=/etc/otelcol/otel-collector.yaml"
           ports:

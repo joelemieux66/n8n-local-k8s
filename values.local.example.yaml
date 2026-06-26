@@ -3,23 +3,16 @@
 
 n8n:
   publicUrl:
-    host: n8n.example.com
-    protocol: https
+    host: n8n.local
+    protocol: http
     port: "5678"
-    webhookUrl: https://n8n.example.com/
-    editorBaseUrl: https://n8n.example.com/
+    webhookUrl: http://n8n.local/
+    editorBaseUrl: http://n8n.local/
 
   proxyHops: "1"
 
   otel:
     enabled: true
-    endpoint: http://otel-collector:4318
-    tracingPath: /v1/traces
-    serviceName: n8n-local
-    sampleRate: "1.0"
-    includeNodeSpans: "true"
-    productionOnly: "false"
-    injectOutbound: "true"
 
   license:
     enabled: false
